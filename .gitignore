@@ -1,0 +1,4 @@
+data
+not_commit_*
+.idea
+__pycache__
