@@ -1,6 +1,3 @@
-import matplotlib.pyplot as plt
-
-from wrapper import Wrapper
 import numpy as np
 import os
 import glob
@@ -13,7 +10,7 @@ def extract_longest_segments(data_convert, no_segment, no_component, filtering_a
 
     for i in range(no_segment):
         idx_split = idx_start + no_component
-        segment_len = abs(data_convert[idx_start, filtering_axes] - data_convert[idx_split-1, filtering_axes])
+        segment_len = abs(data_convert[idx_start, filtering_axes] - data_convert[idx_split - 1, filtering_axes])
         current_segment = data_convert[idx_start:idx_split]
 
         if len(lst_segment) < top_length:
@@ -40,6 +37,15 @@ def get_no_component_segment(data_convert):
     return no_segment, no_component
 
 
+def get_no_component_sfw(data_convert):
+    # Get number of segment in CSV file
+    x_no_seg = np.where(data_convert[:] == 0.0)[0]
+    no_segment = len(x_no_seg) - 1
+    no_component = np.diff(x_no_seg) - 1
+
+    return no_segment, no_component
+
+
 def processing_raw_segment(data_convert, ref_avg, no_segment, no_component):
     idx_start = 1
     output = [None, None, None, None]
@@ -50,11 +56,11 @@ def processing_raw_segment(data_convert, ref_avg, no_segment, no_component):
 
         segment_idx = 0
         dist_compare = 1e6
-        for i in range(len(ref_avg)):
-            cur_dist_compare = abs(ref_avg[i][0] - current_segment_avg[0]) + abs(ref_avg[i][2] - current_segment_avg[2])
+        for j in range(len(ref_avg)):
+            cur_dist_compare = abs(ref_avg[j][0] - current_segment_avg[0]) + abs(ref_avg[j][2] - current_segment_avg[2])
             if dist_compare > cur_dist_compare:
                 dist_compare = cur_dist_compare
-                segment_idx = i
+                segment_idx = j
         if output[segment_idx] is None:
             output[segment_idx] = current_segment
         else:
@@ -68,9 +74,17 @@ def processing_raw_segment(data_convert, ref_avg, no_segment, no_component):
     return output
 
 
-def collecting_all_segments(csv_filepath):
+def collecting_all_data(csv_filepath, get_no_func):
+    """
+    Get data separated by "0" array
+
+    :param csv_filepath:
+    :param get_no_func: Function to GET number of data segment AND number of component per segment based on type
+    of data
+    :return: List of segment data
+    """
     segment_data = np.genfromtxt(csv_filepath, delimiter=",")
-    no_segment, no_component = get_no_component_segment(segment_data)
+    no_segment, no_component = get_no_func(segment_data)
 
     idx_start = 1
     lst_segments = []
@@ -118,9 +132,13 @@ def calculate_distance_of_2segments(segment1_data, segment2_data):
 
     temp_array = np.array([])
     idx_temp_array = np.array([], dtype=int)
+    first_idx = None
+
     for j in range(0, y_array.shape[0] - 1):
         in_segment_idx = np.where((y_array[j] <= equal_segments) & (equal_segments <= y_array[j + 1]))[0]
         if in_segment_idx.shape[0] != 0:
+            if first_idx is None:
+                first_idx = in_segment_idx[0]
             for idd in in_segment_idx:
                 if idd not in idx_temp_array:
                     y_hat = equal_segments[idd]
@@ -135,13 +153,12 @@ def calculate_distance_of_2segments(segment1_data, segment2_data):
         else:
             continue
         idx_temp_array = np.append(idx_temp_array, in_segment_idx)
-    distance_array = abs(x1_array[:-1] - temp_array)
-
+    distance_array = abs(x1_array[first_idx:temp_array.shape[0] + first_idx] - temp_array)
     return distance_array
 
 
 def process_calculate_sfw(csv_filepath):
-    list_segments = collecting_all_segments(csv_filepath)
+    list_segments = collecting_all_data(csv_filepath, get_no_func=get_no_component_segment)
     group_segments = grouping_sorting(list_segments)
 
     SFW_array = np.array([[0]])
@@ -149,12 +166,33 @@ def process_calculate_sfw(csv_filepath):
         sfw = calculate_distance_of_2segments(one_group[0], one_group[1]).reshape(-1, 1)
         SFW_array = np.concatenate((SFW_array, sfw))
         SFW_array = np.concatenate((SFW_array, np.array([[0]])))
-    print(SFW_array.shape)
 
     return SFW_array
 
 
-def process_data(filepath, csv_file_prefix, save_file_prefix):
+def process_calculate_average_sfw(csv_filepath):
+    list_segments = collecting_all_data(csv_filepath, get_no_func=get_no_component_sfw)
+    sfw_average = []
+    for one_segment in list_segments:
+        sfw_average.append(np.average(one_segment))
+
+    if len(sfw_average) == 0:
+        raise ValueError("SFW average cannot be empty")
+
+    return sfw_average
+
+
+def create_directory(save_path, sub_dir_name):
+    save_path = os.path.join(save_path, sub_dir_name)
+    try:
+        os.mkdir(save_path)
+    except OSError:
+        print("Creation of the temperature with time directory %s failed" % save_path)
+    else:
+        print("Successfully created the  temperature with time directory %s" % save_path)
+
+
+def process_sfw_data(filepath, csv_file_prefix, save_file_prefix):
     """
     Finding all files and processing all files in filepath
 
@@ -175,9 +213,43 @@ def process_data(filepath, csv_file_prefix, save_file_prefix):
     all_files = sorted(all_files, key=lambda x: int(os.path.splitext(os.path.basename(x))[0].split("_")[-1]))
 
     # Iterating over files and process
-    for i, datafile in enumerate(all_files, 1):
+    for num, datafile in enumerate(all_files, 1):
         filename = os.path.splitext(os.path.basename(datafile))[0]
-        print("Extracting distance from file: {}".format(filename))
+        frame = filename.split("_")[-1]
+        print("Extracting SFW from file: {}".format(filename))
         sfw = process_calculate_sfw(datafile)
-        np.savetxt(os.path.join(filepath, save_file_prefix + "{}.csv".format(i)), sfw, delimiter=",")
-        print('{}/{} files processed'.format(i, num_files))
+        np.savetxt(os.path.join(filepath, save_file_prefix + "{}.csv".format(frame)), sfw, delimiter=",")
+        print('{}/{} files processed'.format(num, num_files))
+
+
+def process_average_sfw_data(filepath, sfw_csv_file_prefix, saved_file_name="sfw_average.csv"):
+    """
+    Calculate average SFW data based on SFW CSV files
+
+    :param filepath: Path to SFW CSV files
+    :param sfw_csv_file_prefix: SFW CSV files prefix
+    :param saved_file_name: SFW average CSV file name
+    :return: None
+    """
+    # Processing all SFW files
+    # Get all SFW CSV files from directory
+    all_SFW_files = []
+    for root, dirs, files in os.walk(filepath):
+        files = glob.glob(os.path.join(root, sfw_csv_file_prefix + "*[0-9].csv"))
+        for f in files:
+            all_SFW_files.append(os.path.abspath(f))
+
+    # Number of files in directory
+    num_SFW_files = len(all_SFW_files)
+    all_SFW_files = sorted(all_SFW_files, key=lambda x: int(os.path.splitext(os.path.basename(x))[0].split("_")[-1]))
+
+    # Iterating over files and process
+    average_sfw = []
+    for datafile in all_SFW_files:
+        filename = os.path.splitext(os.path.basename(datafile))[0]
+        frame = int(filename.split("_")[-1]) + 1
+        print("Calculating average SFW from file: {}".format(filename))
+        average_sfw.append(process_calculate_average_sfw(datafile))
+        print('{}/{} files processed'.format(frame, num_SFW_files))
+
+    np.savetxt(os.path.join(filepath, saved_file_name), average_sfw, delimiter=",")
