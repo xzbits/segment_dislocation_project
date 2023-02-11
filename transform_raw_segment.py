@@ -3,28 +3,22 @@ import os
 import glob
 
 
-def extract_longest_segments(data_convert, no_segment, no_component, filtering_axes=1, top_length=4):
+def extract_longest_segments(raw_lst_segment, filtering_axes=1, top_length=4):
     # Extract segments from convert segments
-    idx_start = 1
-    lst_segment = list()
+    filter_lst_segments = list()
 
-    for i in range(no_segment):
-        idx_split = idx_start + no_component
-        segment_len = abs(data_convert[idx_start, filtering_axes] - data_convert[idx_split - 1, filtering_axes])
-        current_segment = data_convert[idx_start:idx_split]
+    for current_segment in raw_lst_segment:
+        segment_len = abs(current_segment[0, filtering_axes] - current_segment[-1, filtering_axes])
+        if len(filter_lst_segments) < top_length:
+            filter_lst_segments.append(current_segment)
+        elif segment_len > abs(filter_lst_segments[0][0, filtering_axes] - filter_lst_segments[0][-1, filtering_axes]):
+            filter_lst_segments[0] = current_segment
+        filter_lst_segments.sort(key=lambda x: abs(x[0, filtering_axes] - x[-1, filtering_axes]))
 
-        if len(lst_segment) < top_length:
-            lst_segment.append((current_segment, segment_len))
-        elif segment_len > lst_segment[0][1]:
-            lst_segment[0] = (current_segment, segment_len)
-
-        lst_segment.sort(key=lambda x: x[1])
-        idx_start = idx_split + 1
-
-    if len(lst_segment) == 0:
+    if len(filter_lst_segments) == 0:
         raise ValueError("There is no segments after filtering, please check again the raw data file")
 
-    return lst_segment
+    return filter_lst_segments
 
 
 def get_no_component_segment(data_convert):
@@ -85,7 +79,6 @@ def collecting_all_data(csv_filepath, get_no_func):
     """
     segment_data = np.genfromtxt(csv_filepath, delimiter=",")
     no_segment, no_component = get_no_func(segment_data)
-
     idx_start = 1
     lst_segments = []
     for i in range(no_segment):
@@ -97,6 +90,9 @@ def collecting_all_data(csv_filepath, get_no_func):
 
 
 def grouping_sorting(lst_segment, group_by_axes=2, no_segment_per_group=2, sort_by_axes=0):
+    # Get 4 longest segments
+    lst_segment = extract_longest_segments(lst_segment)
+
     # Grouping segments by (self.group_by_axes)-axes value
     # with 0 = x-axes, 1 = y-axes, 2 = z-axes
     grouped_segments = list()
@@ -249,7 +245,11 @@ def process_average_sfw_data(filepath, sfw_csv_file_prefix, saved_file_name="sfw
         filename = os.path.splitext(os.path.basename(datafile))[0]
         frame = int(filename.split("_")[-1]) + 1
         print("Calculating average SFW from file: {}".format(filename))
-        average_sfw.append(process_calculate_average_sfw(datafile))
+        add_data = process_calculate_average_sfw(datafile)
+        if len(add_data) > 2:
+            raise ValueError(
+                "There are more than 2 pair of segments in frame {}. Please check again!!".format(frame - 1))
+        average_sfw.append(add_data)
         print('{}/{} files processed'.format(frame, num_SFW_files))
+    np.savetxt(os.path.join(filepath, saved_file_name), np.array(average_sfw), delimiter=",")
 
-    np.savetxt(os.path.join(filepath, saved_file_name), average_sfw, delimiter=",")
