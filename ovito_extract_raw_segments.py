@@ -61,7 +61,7 @@ class DumpDirectory:
             # File name with Time
             return r"_(\d+).cfg"
         else:
-            raise RuntimeError("Cannot identify regular expresion term for this {} file".format(file_name))
+            raise RuntimeError("Cannot identify regular expression term for this {} file".format(file_name))
 
     def extract_temperature_list(self):
         output_list = list()

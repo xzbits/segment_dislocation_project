@@ -40,7 +40,7 @@ def get_no_component_sfw(data_convert):
     return no_segment, no_component
 
 
-def processing_raw_segment(data_convert, ref_avg, no_segment, no_component):
+def merging_raw_segment(data_convert, ref_avg, no_segment, no_component):
     idx_start = 1
     output = [None, None, None, None]
     for i in range(no_segment):
@@ -153,20 +153,20 @@ def calculate_distance_of_2segments(segment1_data, segment2_data):
     return distance_array
 
 
-def process_calculate_sfw(csv_filepath):
+def calculate_sfw(csv_filepath):
     list_segments = collecting_all_data(csv_filepath, get_no_func=get_no_component_segment)
     group_segments = grouping_sorting(list_segments)
 
-    SFW_array = np.array([[0]])
+    sfw_array = np.array([[0]])
     for one_group in group_segments:
         sfw = calculate_distance_of_2segments(one_group[0], one_group[1]).reshape(-1, 1)
-        SFW_array = np.concatenate((SFW_array, sfw))
-        SFW_array = np.concatenate((SFW_array, np.array([[0]])))
+        sfw_array = np.concatenate((sfw_array, sfw))
+        sfw_array = np.concatenate((sfw_array, np.array([[0]])))
 
-    return SFW_array
+    return sfw_array
 
 
-def process_calculate_average_sfw(csv_filepath):
+def calculate_average_sfw(csv_filepath):
     list_segments = collecting_all_data(csv_filepath, get_no_func=get_no_component_sfw)
     sfw_average = []
     for one_segment in list_segments:
@@ -183,9 +183,9 @@ def create_directory(save_path, sub_dir_name):
     try:
         os.mkdir(save_path)
     except OSError:
-        print("Creation of the temperature with time directory %s failed" % save_path)
+        print("Creation of the directory %s failed" % save_path)
     else:
-        print("Successfully created the  temperature with time directory %s" % save_path)
+        print("Successfully created the directory %s" % save_path)
 
 
 def process_sfw_data(filepath, csv_file_prefix, save_file_prefix):
@@ -213,7 +213,7 @@ def process_sfw_data(filepath, csv_file_prefix, save_file_prefix):
         filename = os.path.splitext(os.path.basename(datafile))[0]
         frame = filename.split("_")[-1]
         print("Extracting SFW from file: {}".format(filename))
-        sfw = process_calculate_sfw(datafile)
+        sfw = calculate_sfw(datafile)
         np.savetxt(os.path.join(filepath, save_file_prefix + "{}.csv".format(frame)), sfw, delimiter=",")
         print('{}/{} files processed'.format(num, num_files))
 
@@ -245,7 +245,7 @@ def process_average_sfw_data(filepath, sfw_csv_file_prefix, saved_file_name="sfw
         filename = os.path.splitext(os.path.basename(datafile))[0]
         frame = int(filename.split("_")[-1]) + 1
         print("Calculating average SFW from file: {}".format(filename))
-        add_data = process_calculate_average_sfw(datafile)
+        add_data = calculate_average_sfw(datafile)
         if len(add_data) > 2:
             raise ValueError(
                 "There are more than 2 pair of segments in frame {}. Please check again!!".format(frame - 1))
