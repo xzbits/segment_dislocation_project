@@ -20,13 +20,13 @@ if __name__ == "__main__":
                                        type=str,
                                        help='Path pointing to a saved directory')
 
-    parser_lammps_extract.add_argument('-prefix', '--dumpfile_prefix',
+    parser_lammps_extract.add_argument('-p', '--dumpfile_prefix',
                                        required=False,
                                        default='dump.dislocation_',
                                        type=str,
                                        help='LAMMPS dump files prefix. Default: dump.dislocation_')
 
-    parser_lammps_extract.add_argument('-temp', '--temperature_list',
+    parser_lammps_extract.add_argument('-t', '--temperature_list',
                                        required=False,
                                        default=[10, 200, 400, 600, 800, 1000],
                                        nargs='*',
